@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Losování zápasníků</title>
+
+    <!-- Google Fonts: UFC styl -->
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500&display=swap" rel="stylesheet">
+
+    <!-- Bootstrap 5 CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css">
+
+    <!-- Font Awesome (ikony) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Animate.css (animace) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Oswald', sans-serif; /* Nastavení UFC stylu */
+        }
+        .container {
+            max-width: 700px;
+        }
+        .card {
+            transition: 0.3s;
+            text-align: center;
+        }
+        .card:hover {
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body class="container mt-4">
+
+    <h1 class="text-center fw-bold">
+        Losování zápasníků <i class="fa-solid fa-users"></i>
+    </h1>
+
+    <div class="row justify-content-center my-4">
+        <button id="drawFighterBtn" class="btn btn-primary mx-2 animate__animated animate__pulse">
+            <i class="fa-solid fa-dice"></i> Losuj pro Uživatele 1
+        </button>
+        <button id="drawFighterBtn2" class="btn btn-primary mx-2 animate__animated animate__pulse">
+            <i class="fa-solid fa-dice"></i> Losuj pro Uživatele 2
+        </button>
+        <button id="drawMatchupBtn" class="btn btn-success mx-2">
+            <i class="fa-solid fa-handshake"></i> Vygeneruj zápasy
+        </button>
+    </div>
+
+    <div class="row justify-content-center my-4">
+        <button id="resetGameBtn" class="btn btn-danger">
+            <i class="fa-solid fa-trash"></i> Resetovat hru
+        </button>
+    </div>
+
+    <!-- Výpis zápasníků -->
+    <h2 class="text-primary">Uživatel 1</h2>
+    <div id="fighters1" class="row row-cols-2 g-2"></div>
+
+    <h2 class="text-success mt-4">Uživatel 2</h2>
+    <div id="fighters2" class="row row-cols-2 g-2"></div>
+
+    <h2 class="text-warning mt-4">Vygenerované zápasy</h2>
+    <pre id="matchup" class="p-3 bg-dark text-white rounded"></pre>
+
+    <h2 class="mt-4">Tradování zápasníků</h2>
+
+    <!-- Formulář pro nabídku tradování -->
+    <h3>Uživatel 1 - Vyber zápasníka k výměně:</h3>
+    <select id="fighterSelectUser1">
+        <!-- Dynamicky naplníme z Firebase -->
+    </select>
+
+    <h3>Uživatel 2 - Vyber zápasníka k výměně:</h3>
+    <select id="fighterSelectUser2">
+        <!-- Dynamicky naplníme z Firebase -->
+    </select>
+
+    <button id="offerTradeBtnUser1" class="btn btn-warning my-2">Nabídnout Trade</button>
+
+    <!-- Uživatel 2 - Možnost přijmout nebo odmítnout trade -->
+    <div id="tradeOfferUser1" style="display: none;">
+        <h4>User 2 - Přijmout nebo odmítnout Trade:</h4>
+        <p><strong>User 1 nabízí:</strong> <span id="offeredFighterUser1"></span> <strong>za</strong> <span id="offeredFighterUser2"></span></p>
+        <button id="acceptTradeBtn" class="btn btn-success">Přijmout Trade</button>
+        <button id="rejectTradeBtn" class="btn btn-danger">Odmítnout Trade</button>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js';
+        import { getFirestore, doc, setDoc, getDoc, deleteDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBe-N8G84VgWqnjyQjL6tqUUsX-ATaua4o",
+            authDomain: "ufclosovani-v2.firebaseapp.com",
+            projectId: "ufclosovani-v2",
+            storageBucket: "ufclosovani-v2.firebasestorage.app",
+            messagingSenderId: "474965314703",
+            appId: "1:474965314703:web:77d21e457a651f937874fa",
+            measurementId: "G-1H3QR01SG2"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        const allFighters = [
+            'Omari Akhmedov', 'Michael Bisping', 'Derek Brunson', 'Jared Canonnier', 'Khamzat Chimaev',
+            'Paulo Costa', 'Nick Diaz', 'Dricus Du Plessis', 'Kelvin Gastelum', 'Uriah Hall',
+            'Jack Hermansson', 'Kevin Holland', 'Krzysztof Jotko', 'Lyoto Machida', 'Demian Maia',
+            'Bo Nickal', 'Alex Pereira', 'Luke Rockhold', 'Yoel Romero', 'Thiago Santos',
+            'Anderson Silva', 'Anthony Smith', 'G. St-Pierre', 'Sean Strickland', 'Darren Till',
+            'Marvin Vettori', 'Robert Whittaker'
+        ];
+
+        let userRole = "";
+
+        async function drawFighters(role) {
+            let selectedFighters = [];
+            let availableFighters = [...allFighters];
+
+            for (let i = 0; i < 8; i++) {
+                const randomIndex = Math.floor(Math.random() * availableFighters.length);
+                selectedFighters.push(availableFighters[randomIndex]);
+                availableFighters.splice(randomIndex, 1);
+            }
+
+            await setDoc(doc(db, "game", role), { fighters: selectedFighters });
+        }
+
+        async function drawMatchups() {
+            const docUser1 = await getDoc(doc(db, "game", "user1"));
+            const docUser2 = await getDoc(doc(db, "game", "user2"));
+
+            if (docUser1.exists() && docUser2.exists()) {
+                const matchups = docUser1.data().fighters.map((fighter, index) => `${fighter} vs. ${docUser2.data().fighters[index]}`);
+                await setDoc(doc(db, "game", "matchups"), { matches: matchups });
+            }
+        }
+
+        async function resetGame() {
+            await deleteDoc(doc(db, "game", "user1"));
+            await deleteDoc(doc(db, "game", "user2"));
+            await deleteDoc(doc(db, "game", "matchups"));
+            await deleteDoc(doc(db, "game", "state"));
+            location.reload();
+        }
+
+        onSnapshot(doc(db, "game", "user1"), (doc) => {
+            if (doc.exists()) {
+                document.getElementById('fighters1').innerHTML = doc.data().fighters.map(fighter =>
+                    `<div class="col"><div class="card p-2">${fighter}</div></div>`
+                ).join('');
+                updateFighterSelect('user1', doc.data().fighters);
+            }
+        });
+
+        onSnapshot(doc(db, "game", "user2"), (doc) => {
+            if (doc.exists()) {
+                document.getElementById('fighters2').innerHTML = doc.data().fighters.map(fighter =>
+                    `<div class="col"><div class="card p-2">${fighter}</div></div>`
+                ).join('');
+                updateFighterSelect('user2', doc.data().fighters);
+            }
+        });
+
+        onSnapshot(doc(db, "game", "matchups"), (doc) => {
+            if (doc.exists()) {
+                document.getElementById('matchup').innerText = doc.data().matches.join('\n');
+            }
+        });
+
+        function updateFighterSelect(user, fighters) {
+            const selectElement = document.getElementById(`fighterSelect${user.charAt(0).toUpperCase() + user.slice(1)}`);
+            selectElement.innerHTML = fighters.map(fighter =>
+                `<option value="${fighter}">${fighter}</option>`
+            ).join('');
+        }
+
+        document.getElementById('drawFighterBtn').addEventListener('click', () => drawFighters("user1"));
+        document.getElementById('drawFighterBtn2').addEventListener('click', () => drawFighters("user2"));
+        document.getElementById('drawMatchupBtn').addEventListener('click', drawMatchups);
+        document.getElementById('resetGameBtn').addEventListener('click', resetGame);
+
+        // Tradování zápasníků
+        document.getElementById('offerTradeBtnUser1').addEventListener('click', () => {
+            const user1Fighter = document.getElementById('fighterSelectUser1').value;
+            const user2Fighter = document.getElementById('fighterSelectUser2').value;
+
+            if (user1Fighter && user2Fighter) {
+                document.getElementById('tradeOfferUser1').style.display = 'block';
+                document.getElementById('offeredFighterUser1').innerText = user1Fighter;
+                document.getElementById('offeredFighterUser2').innerText = user2Fighter;
+            }
+        });
+
+        document.getElementById('acceptTradeBtn').addEventListener('click', async () => {
+            const user1Fighter = document.getElementById('fighterSelectUser1').value;
+            const user2Fighter = document.getElementById('fighterSelectUser2').value;
+
+            // Výměna zápasníků mezi uživateli
+            const user1Doc = await getDoc(doc(db, "game", "user1"));
+            const user2Doc = await getDoc(doc(db, "game", "user2"));
+
+            if (user1Doc.exists() && user2Doc.exists()) {
+                let user1Fighters = user1Doc.data().fighters;
+                let user2Fighters = user2Doc.data().fighters;
+
+                // Vyměňte zápasníky
+                const user1Index = user1Fighters.indexOf(user1Fighter);
+                const user2Index = user2Fighters.indexOf(user2Fighter);
+
+                if (user1Index !== -1 && user2Index !== -1) {
+                    user1Fighters[user1Index] = user2Fighter;
+                    user2Fighters[user2Index] = user1Fighter;
+
+                    // Aktualizujte databázi
+                    await setDoc(doc(db, "game", "user1"), { fighters: user1Fighters });
+                    await setDoc(doc(db, "game", "user2"), { fighters: user2Fighters });
+                }
+            }
+        });
+
+        document.getElementById('rejectTradeBtn').addEventListener('click', () => {
+            document.getElementById('tradeOfferUser1').style.display = 'none';
+        });
+    </script>
+
+</body>
+</html>
